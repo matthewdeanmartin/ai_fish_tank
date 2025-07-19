@@ -1,5 +1,6 @@
 """"
-Fish tank. Bot controls entire board.
+Fish tank. Bot controls entire board, generates the tank, code checks if the tank is
+consistent with game rules.
 """
 import textwrap
 

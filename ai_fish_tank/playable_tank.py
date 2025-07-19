@@ -1,3 +1,7 @@
+"""
+Tanks is a playable game. Not wired up to AI yet. AI would be the player.
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 import logging

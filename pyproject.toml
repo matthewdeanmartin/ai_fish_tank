@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "ai_fish_tank"
 version = "1.0.0"
-description = "LLM Build Script. Does not edit code."
+description = "AI Fish Tank"
 authors = ["Matthew Martin <matthewdeanmartin@gmail.com>"]
-keywords = ["build", "openai" ]
+keywords = ["fish-tank", "openai" ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
