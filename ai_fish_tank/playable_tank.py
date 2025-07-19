@@ -19,6 +19,7 @@ class Fish:
     tank: "FishTank"
     likes_to_eat: list[str] = field(default_factory=list)
     field_of_view: list[list[str | None]] = field(default_factory=list)
+    monologue: str = ""
 
     def update_field_of_view(self) -> None:
         """Updates the fish's field of view based on its current position in the tank."""
@@ -78,6 +79,11 @@ class Fish:
             self.tank.remove_fish_at_position(target_position)
         else:
             LOGGER.info(f"No fish found to attack at position {target_position}.")
+
+    def speak(self, text: str) -> None:
+        """Store a line of monologue for later rendering."""
+        LOGGER.info(f"{self.name} says: {text}")
+        self.monologue = text
 
 
 @dataclass
@@ -229,6 +235,14 @@ class FishTank:
         # Render the bottom border
         print(self.bottom_border * (self.width + 2))
 
+    def render_tank_with_monologues(self) -> None:
+        """Render the tank followed by the latest monologues for each fish."""
+        print(self.render_tank_str())
+        for fish in self.fishes:
+            if fish.monologue:
+                print(f"{fish.emoji} {fish.monologue}")
+                fish.monologue = ""
+
 
 def run():
     # Example setup and usage of the classes.
@@ -243,6 +257,10 @@ def run():
     seaweed = InanimateObject(emoji="🌿", position=(7, 7))
     tank.add_object(rock)
     tank.add_object(seaweed)
+
+    tank.render_tank_with_monologues()
+
+    tank.render_tank_with_monologues()
 
     tank.render_tank()
 
@@ -284,6 +302,8 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
     seaweed = InanimateObject(emoji="🌿", position=(7, 7))
     tank.add_object(rock)
     tank.add_object(seaweed)
+
+    tank.render_tank_with_monologues()
 
     tools = [
         {
@@ -350,7 +370,19 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
             model="gpt-4-function", messages=messages, tools=tools, tool_choice="auto"
         )
 
-        tool_calls = getattr(response.choices[0].message, "tool_calls", [])
+        message = response.choices[0].message
+        tool_calls = getattr(message, "tool_calls", [])
+        text_content = getattr(message, "content", "")
+        if text_content:
+            for line in text_content.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                for fish in tank.fishes:
+                    if line.startswith(fish.emoji):
+                        fish.speak(line[len(fish.emoji):].strip())
+                        break
+
         if not tool_calls:
             break
 
@@ -394,8 +426,12 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
                 }
             )
 
+        tank.render_tank_with_monologues()
+
         if len(tank.fishes) <= 1:
             break
+
+    tank.render_tank_with_monologues()
 
     return tank
 
