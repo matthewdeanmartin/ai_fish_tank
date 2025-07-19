@@ -1,10 +1,7 @@
-"""
-Tanks is a playable game. Not wired up to AI yet. AI would be the player.
-
-Do not import openai here. This is a stand alone game.
-"""
+"""Fish tank game with optional AI player."""
 
 import logging
+import json
 from dataclasses import dataclass, field
 
 # Setting up logging
@@ -181,6 +178,28 @@ class FishTank:
         LOGGER.info(f"Mini-map for fish at position {position} generated.")
         return mini_map
 
+    def render_tank_str(self) -> str:
+        """Return the tank as a string instead of printing."""
+        lines = [self.top_border * (self.width + 2)]
+        for y in range(self.height):
+            row = [self.side_border]
+            for x in range(self.width):
+                emoji = "⬛"
+                for fish in self.fishes:
+                    if fish.position == (x, y):
+                        emoji = fish.emoji
+                        break
+                if emoji == "⬛":
+                    for obj in self.objects:
+                        if obj.position == (x, y):
+                            emoji = obj.emoji
+                            break
+                row.append(emoji)
+            row.append(self.side_border)
+            lines.append("".join(row))
+        lines.append(self.bottom_border * (self.width + 2))
+        return "\n".join(lines)
+
     def render_tank(self) -> None:
         """Renders the entire fish tank with borders and objects."""
         LOGGER.info("Rendering fish tank with borders.")
@@ -244,6 +263,141 @@ def run():
     print(f"Fish {fish2.name} field of view:")
     for row in fish2.field_of_view:
         print(row)
+
+
+def ai_run(max_rounds: int = 5, client=None) -> FishTank:
+    """Run the game loop controlled by an AI actor."""
+    from openai import OpenAI  # Imported here so normal run has no dependency
+    from ai_fish_tank.env_loader import load_env
+
+    load_env()
+    if client is None:
+        client = OpenAI()
+
+    tank = FishTank(width=10, height=8)
+    fish1 = Fish(name="Nemo", emoji="🐟", position=(5, 5), tank=tank, likes_to_eat=["🌿"])
+    fish2 = Fish(name="Dory", emoji="🐠", position=(2, 2), tank=tank)
+    tank.add_fish(fish1)
+    tank.add_fish(fish2)
+
+    rock = InanimateObject(emoji="🪨", position=(3, 3))
+    seaweed = InanimateObject(emoji="🌿", position=(7, 7))
+    tank.add_object(rock)
+    tank.add_object(seaweed)
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "move",
+                "description": "Move a named fish one cell in a cardinal direction.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "fish": {"type": "string"},
+                        "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
+                    },
+                    "required": ["fish", "direction"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "eat",
+                "description": "Have a fish attempt to eat in a direction.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "fish": {"type": "string"},
+                        "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
+                    },
+                    "required": ["fish", "direction"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "attack",
+                "description": "Have a fish attempt to attack another fish.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "fish": {"type": "string"},
+                        "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
+                    },
+                    "required": ["fish", "direction"],
+                },
+            },
+        },
+    ]
+
+    system_prompt = (
+        "You are a fish tank AI. You receive a visual/textual state of the tank. "
+        "On your turn, decide for each fish: move, eat, or attack. "
+        "Return a list of actions to call functions: move(name, direction), "
+        "eat(name, direction), or attack(name, direction). "
+        "Stop once no more legal moves or game over."
+    )
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    for _ in range(max_rounds):
+        state = tank.render_tank_str()
+        messages.append({"role": "user", "content": state})
+        response = client.chat.completions.create(
+            model="gpt-4-function", messages=messages, tools=tools, tool_choice="auto"
+        )
+
+        tool_calls = getattr(response.choices[0].message, "tool_calls", [])
+        if not tool_calls:
+            break
+
+        for call in tool_calls:
+            args = json.loads(call.function.arguments)
+            fish_name = args.get("fish")
+            direction = args.get("direction")
+            target_fish = next((f for f in tank.fishes if f.name == fish_name), None)
+            if not target_fish:
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "name": call.function.name,
+                        "content": f"No fish named {fish_name}",
+                    }
+                )
+                continue
+
+            content = ""
+            if call.function.name == "move":
+                new_pos = target_fish.calculate_new_position(direction)
+                if tank.is_move_possible(new_pos):
+                    target_fish.move(direction)
+                    content = "ok"
+                else:
+                    content = "That move was invalid; please try again."
+            elif call.function.name == "eat":
+                target_fish.eat(direction)
+                content = "ok"
+            elif call.function.name == "attack":
+                target_fish.attack(direction)
+                content = "ok"
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "name": call.function.name,
+                    "content": content,
+                }
+            )
+
+        if len(tank.fishes) <= 1:
+            break
+
+    return tank
 
 
 if __name__ == "__main__":
