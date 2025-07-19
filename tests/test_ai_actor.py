@@ -23,7 +23,7 @@ class FakeClient:
 
 
 def test_ai_run_moves_fish(monkeypatch):
-    monkeypatch.setattr(playable_tank, "OpenAI", lambda: FakeClient())
+    monkeypatch.setattr("openai.OpenAI", lambda: FakeClient())
     tank = playable_tank.ai_run(max_rounds=1)
     nemo = next(f for f in tank.fishes if f.name == "Nemo")
     assert nemo.position == (5, 4)

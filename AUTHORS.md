@@ -5,3 +5,4 @@
 
 * [OpenAI Codex](https://openai.com/)
 * [GPT-4o](https://openai.com/)
+* [GPT-4](https://openai.com/)
