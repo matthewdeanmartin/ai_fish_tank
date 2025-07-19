@@ -4,3 +4,4 @@
 * [ChatGPT](https://openai.com/)
 
 * [OpenAI Codex](https://openai.com/)
+* [GPT-4o](https://openai.com/)
