@@ -1,10 +1,11 @@
 """
 Tanks is a playable game. Not wired up to AI yet. AI would be the player.
+
+Do not import openai here. This is a stand alone game.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
 import logging
+from dataclasses import dataclass, field
 
 # Setting up logging
 LOGGER = logging.getLogger(__name__)
@@ -14,12 +15,13 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class Fish:
     """Represents a fish in the fish tank."""
+
     name: str
     emoji: str
-    position: Tuple[int, int]
-    tank: 'FishTank'
-    likes_to_eat: List[str] = field(default_factory=list)
-    field_of_view: List[List[Optional[str]]] = field(default_factory=list)
+    position: tuple[int, int]
+    tank: "FishTank"
+    likes_to_eat: list[str] = field(default_factory=list)
+    field_of_view: list[list[str | None]] = field(default_factory=list)
 
     def update_field_of_view(self) -> None:
         """Updates the fish's field of view based on its current position in the tank."""
@@ -37,20 +39,20 @@ class Fish:
         else:
             LOGGER.info(f"Move blocked. {self.name} remains at {self.position}")
 
-    def calculate_new_position(self, direction: str) -> Tuple[int, int]:
+    def calculate_new_position(self, direction: str) -> tuple[int, int]:
         """Calculates the new position based on the current position and the given direction."""
         x, y = self.position
         if direction == "north":
             return x, y - 1
-        elif direction == "south":
+        if direction == "south":
             return x, y + 1
-        elif direction == "east":
+        if direction == "east":
             return x + 1, y
-        elif direction == "west":
+        if direction == "west":
             return x - 1, y
-        else:
-            LOGGER.warning(f"Invalid direction '{direction}' provided.")
-            return self.position  # Return the same position if the direction is invalid
+
+        LOGGER.warning(f"Invalid direction '{direction}' provided.")
+        return self.position  # Return the same position if the direction is invalid
 
     def eat(self, direction: str) -> None:
         """Attempts to eat something in the specified direction."""
@@ -63,7 +65,8 @@ class Fish:
             self.tank.remove_object_at_position(target_position)
         else:
             LOGGER.info(
-                f"Nothing edible found at position {target_position} or {self.name} doesn't like to eat {target}.")
+                f"Nothing edible found at position {target_position} or {self.name} doesn't like to eat {target}."
+            )
 
     def attack(self, direction: str) -> None:
         """Attempts to attack another fish in the specified direction."""
@@ -83,17 +86,19 @@ class Fish:
 @dataclass
 class InanimateObject:
     """Represents an inanimate object in the fish tank."""
+
     emoji: str
-    position: Tuple[int, int]
+    position: tuple[int, int]
 
 
 @dataclass
 class FishTank:
     """Represents the fish tank containing fish and inanimate objects."""
+
     width: int
     height: int
-    fishes: List[Fish] = field(default_factory=list)
-    objects: List[InanimateObject] = field(default_factory=list)
+    fishes: list[Fish] = field(default_factory=list)
+    objects: list[InanimateObject] = field(default_factory=list)
     top_border: str = "🌊"
     bottom_border: str = "🪨"
     side_border: str = "🪟"
@@ -108,7 +113,7 @@ class FishTank:
         LOGGER.info(f"Adding object {obj.emoji} at position {obj.position}")
         self.objects.append(obj)
 
-    def is_move_possible(self, position: Tuple[int, int]) -> bool:
+    def is_move_possible(self, position: tuple[int, int]) -> bool:
         """Checks if a move is possible (within bounds and no collision with objects)."""
         x, y = position
         if not (0 <= x < self.width and 0 <= y < self.height):
@@ -124,36 +129,36 @@ class FishTank:
 
         return True
 
-    def get_object_at_position(self, position: Tuple[int, int]) -> Optional[str]:
+    def get_object_at_position(self, position: tuple[int, int]) -> str | None:
         """Returns the emoji of the object at the given position, or None if there's no object."""
         for obj in self.objects:
             if obj.position == position:
                 return obj.emoji
         return None
 
-    def get_fish_at_position(self, position: Tuple[int, int]) -> Optional[Fish]:
+    def get_fish_at_position(self, position: tuple[int, int]) -> Fish | None:
         """Returns the fish at the given position, or None if there's no fish."""
         for fish in self.fishes:
             if fish.position == position:
                 return fish
         return None
 
-    def remove_object_at_position(self, position: Tuple[int, int]) -> None:
+    def remove_object_at_position(self, position: tuple[int, int]) -> None:
         """Removes an object at the specified position."""
         self.objects = [obj for obj in self.objects if obj.position != position]
         LOGGER.info(f"Object at position {position} has been removed from the tank.")
 
-    def remove_fish_at_position(self, position: Tuple[int, int]) -> None:
+    def remove_fish_at_position(self, position: tuple[int, int]) -> None:
         """Removes a fish at the specified position."""
         self.fishes = [fish for fish in self.fishes if fish.position != position]
         LOGGER.info(f"Fish at position {position} has been removed from the tank.")
 
-    def get_mini_map(self, position: Tuple[int, int], view_range: int = 2) -> List[List[Optional[str]]]:
+    def get_mini_map(self, position: tuple[int, int], view_range: int = 2) -> list[list[str | None]]:
         """Generates a mini-map of the surrounding area based on the fish's position."""
         x, y = position
         mini_map = []
         for dy in range(-view_range, view_range + 1):
-            row = []
+            row: list[str | None] = []
             for dx in range(-view_range, view_range + 1):
                 px, py = x + dx, y + dy
                 if 0 <= px < self.width and 0 <= py < self.height:
@@ -206,8 +211,9 @@ class FishTank:
         print(self.bottom_border * (self.width + 2))
 
 
-if __name__ == "__main__":
+def run():
     # Example setup and usage of the classes.
+    # This could have prompted a human or a user for each game action/motion.
     tank = FishTank(width=10, height=8)
     fish1 = Fish(name="Nemo", emoji="🐟", position=(5, 5), tank=tank, likes_to_eat=["🌿"])
     fish2 = Fish(name="Dory", emoji="🐠", position=(2, 2), tank=tank)
@@ -238,3 +244,7 @@ if __name__ == "__main__":
     print(f"Fish {fish2.name} field of view:")
     for row in fish2.field_of_view:
         print(row)
+
+
+if __name__ == "__main__":
+    run()

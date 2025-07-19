@@ -1,17 +1,15 @@
-""""
+"""
 Fish tank. Bot controls entire board, generates the tank, code checks if the tank is
 consistent with game rules.
 """
-import textwrap
 
-import openai
-import pickle
-from pathlib import Path
-from typing import List, Tuple, Dict
 import logging
-import random
-
 import os
+import pickle  # nosec
+import random
+import textwrap
+from pathlib import Path
+from typing import Any
 
 from openai import OpenAI
 
@@ -29,7 +27,7 @@ TANK_HEIGHT = 5
 class Fish:
     """Represents a fish in the fish tank with attributes such as name, position, species, and personality traits."""
 
-    def __init__(self, name: str, position: Tuple[int, int], species: str, traits: str, emoji: str, goal: str) -> None:
+    def __init__(self, name: str, position: tuple[int, int], species: str, traits: str, emoji: str, goal: str) -> None:
         """
         Initializes a Fish object.
 
@@ -48,7 +46,7 @@ class Fish:
         self.emoji = emoji
         self.goal = goal
 
-    def move(self, new_position: Tuple[int, int]) -> None:
+    def move(self, new_position: tuple[int, int]) -> None:
         """
         Updates the fish's position based on its personality and the bot's instructions.
 
@@ -64,7 +62,7 @@ class Fish:
 class FishTank:
     """Represents the fish tank environment with fish and plants."""
 
-    def __init__(self, fish_list: List[Fish]) -> None:
+    def __init__(self, fish_list: list[Fish]) -> None:
         """
         Initializes the FishTank object.
 
@@ -73,15 +71,15 @@ class FishTank:
         """
         self.rounds = 0
         self.fish_list = fish_list
-        self.plants_list = []
+        self.plants_list: list[str] = []
         self.tank_size = (TANK_WIDTH, TANK_HEIGHT)  # 12x12 grid
         self.story_so_far = []
         # ocean themed emojis. non living, rocks and stuff
         self.initialize_with_plants(["🌿", "🌱"])
-        self.current_layout = []
-        self.conversation = []
+        self.current_layout: list[str] = []
+        self.conversation: list[str] = []
 
-    def initialize_with_plants(self, plants: List[str]) -> None:
+    def initialize_with_plants(self, plants: list[str]) -> None:
         """
         Initializes the fish tank with plants.
 
@@ -90,7 +88,7 @@ class FishTank:
         """
         # select a random position for each plant bound by tank size
         for plant in plants:
-            x, y = random.randint(0, self.tank_size[0] - 1), random.randint(0, self.tank_size[1] - 1)
+            x, y = random.randint(0, self.tank_size[0] - 1), random.randint(0, self.tank_size[1] - 1)  # nosec
             self.plants_list.append((plant, (x, y)))
 
     def personae_dramatis_markdown(self):
@@ -116,7 +114,7 @@ class FishTank:
         self.current_layout = tank
         return "\n".join(["".join(row) for row in tank])
 
-    def list_differences(self, new_layout: List[List[str]]) -> Dict[str, Tuple[int, int]]:
+    def list_differences(self, new_layout: list[list[str]]) -> dict[Any, tuple[Any, str]]:
         """
         Returns the differences between the current layout and the new layout.
 
@@ -131,7 +129,9 @@ class FishTank:
             for j in range(len(self.current_layout[i])):
                 if self.current_layout[i][j] != new_layout[i][j]:
                     differences[self.current_layout[i][j] + new_layout[i][j]] = (
-                    self.current_layout[i][j], new_layout[i][j])
+                        self.current_layout[i][j],
+                        new_layout[i][j],
+                    )
         return differences
 
     def pretty_print_and_wrap(self, story: str) -> str:
@@ -171,7 +171,7 @@ class FishTank:
 
         # clear tank
         for i in range(rows):
-            for j in range(cols):
+            for _j in range(cols):
                 tank_data[i] = tank_data[i].replace("⬜", " ")
 
         for i, row in enumerate(tank_data):
@@ -195,10 +195,10 @@ class FishTank:
             prompt = "Here is the personae dramatis:\n" + self.personae_dramatis_markdown() + "\n"
         else:
             prompt = ""
-        prompt = (prompt + "Here is a fish tank:\n" + self.draw() + "\n")
+        prompt = prompt + "Here is a fish tank:\n" + self.draw() + "\n"
         if self.rounds == 1:
-            prompt += "Respond with `---start tank---\n` the fishtank's new arrangement, then `---end tank---\n`"
-        " and a story, using `---start story---\n` and `---end story---\n`."
+            prompt += ("Respond with `---start tank---\n` the fishtank's new arrangement, then `---end tank---\n`"
+                       " and a story, using `---start story---\n` and `---end story---\n`.")
 
         prompt += " Describe what happens as each fish moves and interacts, keeping the story under 500 characters."
 
@@ -206,17 +206,16 @@ class FishTank:
 
         if not self.conversation:
             self.conversation = [
-                {"role": "system", "content": "You are a fish tank simulator. You will get a picture of the fish tank, "
-                                              "generate the next fish tank, and then say a bit about what happened."},
+                {
+                    "role": "system",
+                    "content": "You are a fish tank simulator. You will get a picture of the fish tank, "
+                               "generate the next fish tank, and then say a bit about what happened.",
+                },
                 {"role": "user", "content": prompt},
             ]
         else:
             self.conversation.append({"role": "user", "content": prompt})
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=self.conversation,
-            max_tokens=5000
-        )
+        response = client.chat.completions.create(model="gpt-4o-mini", messages=self.conversation, max_tokens=5000)
 
         # story = response['choices'][0]['message']['content'].strip()
         story = response.choices[0].message.content
@@ -225,23 +224,24 @@ class FishTank:
         self.conversation.append({"role": "system", "content": story})
 
         LOGGER.debug("Received story: %s", story)
-        return story
+        return story or ""
 
     def save_state(self, save_path) -> None:
         """Saves the current state of the fish tank to a pickle file."""
         LOGGER.debug("Saving fish tank state to %s", save_path)
-        with open(save_path, 'wb') as file:
+        with open(save_path, "wb") as file:
             pickle.dump(self, file)
 
     @classmethod
-    def load_state(cls, save_path:Path) -> "FishTank":
+    def load_state(cls, save_path: Path) -> "FishTank | None":
         """Loads the fish tank state from a pickle file."""
         if save_path.exists():
             LOGGER.debug("Loading fish tank state from %s", save_path)
-            with open(save_path, 'rb') as file:
-                return pickle.load(file)
-        else:
-            LOGGER.warning("No save file found at %s", save_path)
+            with open(save_path, "rb") as file:
+                return pickle.load(file)  # nosec
+
+        LOGGER.warning("No save file found at %s", save_path)
+        return None
 
 
 class FishTankSimulator:
@@ -257,7 +257,6 @@ class FishTankSimulator:
         """
         self.fish_tank = fish_tank
         self.save_path = save_path
-
 
     def run_simulation(self) -> None:
         """Runs the fish tank simulation, updating the tank and generating stories."""
@@ -275,30 +274,29 @@ class FishTankSimulator:
             self.fish_tank.save_state(self.save_path)
 
             user_input = input("\nContinue simulation? (y/n): ").strip().lower()
-            if user_input != 'y':
+            if user_input != "y":
                 break
 
 
-if __name__ == "__main__":
-    # Update for new attributes
-
+def run_with_ai():
     fish_list = [
         Fish("Goldie", (0, 0), "Goldfish", "curious", "🐠", "Exploring the tank"),
         Fish("Bubbles", (1, 1), "Betta", "timid", "🐟", "Finding a quiet spot"),
         Fish("Finley", (2, 2), "Angelfish", "bold", "🐡", "Patrolling territory"),
         Fish("Stripe", (3, 3), "Zebra Fish", "aggressive", "🐙", "Challenging rivals"),
-        Fish("Glimmer", (4, 4), "Guppy", "peaceful", "🦐", "Socializing with others")
+        Fish("Glimmer", (4, 4), "Guppy", "peaceful", "🦐", "Socializing with others"),
     ]
 
     # Randomize positions of fish
     for fish in fish_list:
-        possible = (random.randint(0, TANK_WIDTH - 1), random.randint(0, TANK_HEIGHT - 1))
+        possible = (random.randint(0, TANK_WIDTH - 1), random.randint(0, TANK_HEIGHT - 1))  # nosec
         if possible not in [fish.position for fish in fish_list]:
             fish.move(possible)
 
     # Validate that the fish all have distinct emojis
     emojis = [fish.emoji for fish in fish_list]
-    assert len(emojis) == len(set(emojis)), "Fish must have distinct emojis"
+    if not len(emojis) == len(set(emojis)):
+        raise TypeError("Fish must have distinct emojis")
 
     save_path = Path("fish_tank_state.pkl")
     if save_path.exists():
@@ -308,3 +306,7 @@ if __name__ == "__main__":
 
     simulator = FishTankSimulator(fish_tank=fish_tank, save_path=Path("fish_tank_state.pkl"))
     simulator.run_simulation()
+
+
+if __name__ == "__main__":
+    run_with_ai()

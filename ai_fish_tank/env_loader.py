@@ -1,9 +1,8 @@
-from typing import Optional
 
 import dotenv
 
 
-def load_env(dotenv_path: Optional[str] = None):
+def load_env(dotenv_path: str | None = None):
     # pylint: disable=broad-exception-caught
     try:
         dotenv.load_dotenv(dotenv_path)  # Load environment variables from .env file if present
@@ -15,4 +14,3 @@ def load_env(dotenv_path: Optional[str] = None):
     #     for key in forbidden:
     #         if key in os.environ:
     #             os.environ.pop(key)
-
