@@ -30,7 +30,7 @@ Do not run the other quality gates. LLM workers like yourself cost tokens and hu
 less $$.
 
 ## Commit messages
-Please prefix with "keepachanglog"
+Please prefix with one of the following keepachanglog types, e.g. Added, Changed, etc see this list:
 
 - Added for new features.
 - Changed for changes in existing functionality.
