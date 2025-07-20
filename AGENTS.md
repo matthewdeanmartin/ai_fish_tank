@@ -44,8 +44,15 @@ If nothing fits, it is "Changed"
 e.g. 
 "Changed: emojis are better"
 
+## Naming Conventions
+- No single letter variable names. 
+- No hungarian notation of any sort (affixing variable names with their type).
+- Spell out words, no ad hoc abbreviations.
+
 ## PR
 Say what you intended to do.
 
 ## Authorship
-Add your model to the authors file.
+Add your model to the authors file. If you see "OpenAI Codex" and you are an OpenAI model, you are already on the AUTHORS list.
+Do not add another entry. Yes, I know you personally don't memory of it. Us humans call all of you bots OpenAI Codex.
+

@@ -19,7 +19,7 @@ def run():
 
     tank.render_tank_with_monologues()
 
-    tank.render_tank()
+    tank.render_tank_str()
 
     fish1.move("north")
     fish1.eat("south")
@@ -29,7 +29,7 @@ def run():
     fish2.move("east")
     fish2.move("south")
 
-    tank.render_tank()
+    tank.render_tank_str()
 
     # For debugging purposes to see the field of view
     print(f"Fish {fish1.name} field of view:")
