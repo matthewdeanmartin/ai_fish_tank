@@ -2,6 +2,7 @@
 
 from openai import OpenAI
 from ai_fish_tank.env_loader import load_env
+from ai_fish_tank.fish_bot import FishBot
 
 import logging
 import json
@@ -243,14 +244,13 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
             "type": "function",
             "function": {
                 "name": "move",
-                "description": "Move a named fish one cell in a cardinal direction.",
+                "description": "Move one cell in a cardinal direction.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "fish": {"type": "string", "enum": ["Nemo", "Dory"]},
                         "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
                     },
-                    "required": ["fish", "direction"],
+                    "required": ["direction"],
                 },
             },
         },
@@ -258,14 +258,13 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
             "type": "function",
             "function": {
                 "name": "eat",
-                "description": "Have a fish attempt to eat in a direction.",
+                "description": "Attempt to eat in a direction.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "fish": {"type": "string", "enum": ["Nemo", "Dory"]},
                         "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
                     },
-                    "required": ["fish", "direction"],
+                    "required": ["direction"],
                 },
             },
         },
@@ -273,14 +272,13 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
             "type": "function",
             "function": {
                 "name": "attack",
-                "description": "Have a fish attempt to attack another fish.",
+                "description": "Attempt to attack another fish in a direction.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "fish": {"type": "string", "enum": ["Nemo", "Dory"]},
                         "direction": {"type": "string", "enum": ["north", "south", "east", "west"]},
                     },
-                    "required": ["fish", "direction"],
+                    "required": ["direction"],
                 },
             },
         },
@@ -288,88 +286,52 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
             "type": "function",
             "function": {
                 "name": "speak",
-                "description": "A fish speaks its mind, providing a monologue.",
+                "description": "Provide a monologue for this fish.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "fish": {"type": "string", "enum": ["Nemo", "Dory"]},
                         "text": {"type": "string", "description": "The content of the fish's monologue."},
                     },
-                    "required": ["fish", "text"],
+                    "required": ["text"],
                 },
             },
         },
     ]
 
-    system_prompt = (
-        "You are a fish tank AI. You receive a visual/textual state of the tank. "
-        "On your turn, decide for each fish: move, eat, attack, or speak. "
-        "Use the speak function to give the fish a monologue about what it sees or thinks. "
-        "Return a list of actions to call functions: move(name, direction), "
-        "eat(name, direction), attack(name, direction), or speak(name, text). "
-        "Stop once no more legal moves or game over."
-    )
-
-    messages = [{"role": "system", "content": system_prompt}]
+    bots = {fish.name: FishBot(fish=fish, client=client) for fish in tank.fishes}
 
     for i in range(max_rounds):
         print(f"\n--- Round {i+1} ---")
         state = tank.render_tank_str()
-        messages.append({"role": "user", "content": state})
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", messages=messages, tools=tools, tool_choice="auto"
-        )
-
-        message = response.choices[0].message
-        tool_calls = message.tool_calls or []
-
-        # Add assistant message to history
-        messages.append(message)
-
-        if not tool_calls:
-            if message.content:
-                 print(f"AI says: {message.content}")
-            break
-
-        for call in tool_calls:
-            args = json.loads(call.function.arguments)
-            fish_name = args.get("fish")
-            target_fish = next((f for f in tank.fishes if f.name == fish_name), None)
-
-            content = ""
-            if not target_fish:
-                content = f"No fish named {fish_name}"
-            else:
+        for bot in bots.values():
+            tool_calls = bot.decide_action(state, tools)
+            for call in tool_calls:
+                args = json.loads(call.function.arguments)
+                fish = bot.fish
+                content = ""
                 function_name = call.function.name
                 if function_name == "move":
                     direction = args.get("direction")
-                    new_pos = target_fish.calculate_new_position(direction)
+                    new_pos = fish.calculate_new_position(direction)
                     if tank.is_move_possible(new_pos):
-                        target_fish.move(direction)
-                        content = f"{fish_name} moved {direction}."
+                        fish.move(direction)
+                        content = f"{fish.name} moved {direction}."
                     else:
-                        content = f"Move for {fish_name} to {direction} was invalid; please try again."
+                        content = f"Move for {fish.name} to {direction} was invalid; please try again."
                 elif function_name == "eat":
                     direction = args.get("direction")
-                    target_fish.eat(direction)
-                    content = f"{fish_name} attempted to eat."
+                    fish.eat(direction)
+                    content = f"{fish.name} attempted to eat."
                 elif function_name == "attack":
                     direction = args.get("direction")
-                    target_fish.attack(direction)
-                    content = f"{fish_name} attempted to attack."
+                    fish.attack(direction)
+                    content = f"{fish.name} attempted to attack."
                 elif function_name == "speak":
                     text = args.get("text")
-                    target_fish.speak(text)
-                    content = f"{fish_name} spoke."
-            LOGGER.info(content)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "name": call.function.name,
-                    "content": content,
-                }
-            )
+                    fish.speak(text)
+                    content = f"{fish.name} spoke."
+                LOGGER.info(content)
+                bot.record_tool_result(call, content)
 
         tank.render_tank_with_monologues()
 
