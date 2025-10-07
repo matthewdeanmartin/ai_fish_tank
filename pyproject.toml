@@ -7,15 +7,14 @@ authors = [
 ]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 keywords = ["fish-tank", "openai"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "openai>0.28",
@@ -37,6 +36,8 @@ ais = 'ai_fish_tank.__main__:run'
 
 [dependency-groups]
 dev = [
+    "pydantic>=2.12.0; python_version >= '3.14'",
+
     "mypy>=1.8.0",
     "pylint>=3.0.2",
     "ruff",
