@@ -221,7 +221,6 @@ class FishTank:
 
 def ai_run(max_rounds: int = 5, client=None) -> FishTank:
     """Run the game loop controlled by an AI actor."""
-
     load_env()
     if client is None:
         client = OpenAI()

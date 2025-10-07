@@ -1,4 +1,3 @@
-import pytest
 
 from ai_fish_tank.playable_tank import Fish, FishTank, InanimateObject
 

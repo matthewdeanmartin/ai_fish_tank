@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from ai_fish_tank.playable_tank import Fish, FishTank
+    from ai_fish_tank.playable_tank import Fish
 
 
 @dataclass
 class FishBot:
     """AI controller for a single fish."""
 
-    fish: "Fish"
+    fish: Fish
     client: OpenAI
-    messages: List[Dict[str, str]] = field(default_factory=list)
+    messages: list[dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         system_prompt = (
@@ -24,7 +24,7 @@ class FishBot:
         )
         self.messages.append({"role": "system", "content": system_prompt})
 
-    def decide_action(self, tank_state: str, tools: List[Dict]) -> list:
+    def decide_action(self, tank_state: str, tools: list[dict]) -> list:
         """Ask the LLM for the next action for this fish."""
         self.messages.append({"role": "user", "content": tank_state})
         response = self.client.chat.completions.create(
