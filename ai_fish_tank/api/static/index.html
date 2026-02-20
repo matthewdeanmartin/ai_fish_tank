@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Fish Tank</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        h1 { color: #00d4ff; margin-bottom: 10px; }
+        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #0f3460;
+        }
+        .panel h2 {
+            margin-top: 0;
+            color: #00d4ff;
+            font-size: 1.1em;
+            border-bottom: 1px solid #0f3460;
+            padding-bottom: 10px;
+        }
+        #tank-display {
+            font-family: monospace;
+            font-size: 24px;
+            line-height: 1.2;
+            white-space: pre;
+            background: #0a1628;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .fish-card {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .fish-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2em;
+        }
+        .fish-emoji { font-size: 2em; }
+        .fish-traits { color: #888; font-size: 0.85em; }
+        .fish-monologue {
+            background: #1a1a2e;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-style: italic;
+            color: #aaa;
+        }
+        .fish-memories {
+            margin-top: 8px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        .fish-memories ul { margin: 5px 0; padding-left: 20px; }
+        .relationship {
+            display: inline-block;
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin: 2px;
+            font-size: 0.8em;
+        }
+        #event-feed {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .event {
+            padding: 8px;
+            border-bottom: 1px solid #0f3460;
+            font-size: 0.9em;
+        }
+        .event:last-child { border-bottom: none; }
+        .event-time { color: #666; font-size: 0.8em; }
+        .event-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.75em;
+            margin-right: 5px;
+        }
+        .event-type.ai_prompt { background: #4a0080; }
+        .event-type.ai_response { background: #006633; }
+        .event-type.fish_action { background: #0066aa; }
+        .event-type.memory_event { background: #666600; }
+        .event-type.relationship_change { background: #660066; }
+        .event-type.game_start { background: #006666; }
+        .event-type.game_end { background: #660000; }
+        .event-type.round_start, .event-type.round_end { background: #333; }
+        .status-bar {
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-item { color: #888; }
+        .status-value { color: #00d4ff; font-weight: bold; }
+        #ai-decisions { max-height: 400px; overflow-y: auto; }
+        .ai-decision {
+            background: #0f3460;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+        }
+        .ai-prompt { color: #888; font-size: 0.85em; white-space: pre-wrap; word-break: break-word; }
+        .ai-response { color: #0f0; font-size: 0.85em; margin-top: 8px; }
+        .auto-scroll { position: relative; }
+        .refresh-notice {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #00d4ff;
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            display: none;
+        }
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Fish Tank</h1>
+    
+    <div class="status-bar">
+        <span class="status-item">Session: <span id="session-id" class="status-value">Loading...</span></span>
+        <span class="status-item">Round: <span id="current-round" class="status-value">0</span></span>
+        <span class="status-item">Status: <span id="game-status" class="status-value">Running</span></span>
+        <span class="status-item">Auto-refresh: <span id="last-update" class="status-value">-</span></span>
+    </div>
+
+    <div class="container">
+        <div>
+            <div class="panel">
+                <h2>Tank View</h2>
+                <div id="tank-display">Loading...</div>
+            </div>
+            
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Fish</h2>
+                <div id="fish-panels">Loading...</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="panel auto-scroll">
+                <h2>AI Decisions</h2>
+                <span class="refresh-notice" id="refresh-notice">New events!</span>
+                <div id="ai-decisions">Loading...</div>
+            </div>
+            
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Event Feed</h2>
+                <div id="event-feed">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

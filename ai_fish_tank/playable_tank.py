@@ -3,10 +3,15 @@
 from openai import OpenAI
 from ai_fish_tank.env_loader import load_env
 from ai_fish_tank.fish_bot import FishBot
+from ai_fish_tank.memory import FishMemory, MemoryEvent
+from ai_fish_tank.relationships import Relationship
+from ai_fish_tank.game_logger import get_logger
+from ai_fish_tank.session import SessionManager, FishInfo
 
 import logging
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # Setting up logging
 LOGGER = logging.getLogger(__name__)
@@ -24,22 +29,72 @@ class Fish:
     likes_to_eat: list[str] = field(default_factory=list)
     field_of_view: list[list[str | None]] = field(default_factory=list)
     monologue: str = ""
+    memory: FishMemory = field(default_factory=FishMemory)
+    relationships: dict[str, Relationship] = field(default_factory=dict)
+    traits: list[str] = field(default_factory=lambda: ["curious"])
 
     def update_field_of_view(self) -> None:
         """Updates the fish's field of view based on its current position in the tank."""
         LOGGER.info(f"Updating field of view for fish {self.name} at position {self.position}")
         self.field_of_view = self.tank.get_mini_map(self.position)
 
+    def get_current_round(self) -> int:
+        """Get the current round from the tank."""
+        return getattr(self.tank, "current_round", 0)
+
     def move(self, direction: str) -> None:
         """Attempts to move the fish in the specified direction."""
+        logger = get_logger()
         LOGGER.info(f"Fish {self.name} attempting to move {direction} from position {self.position}")
+        old_position = self.position
         new_position = self.calculate_new_position(direction)
         if self.tank.is_move_possible(new_position):
             LOGGER.info(f"Move successful. {self.name} moved to {new_position}")
             self.position = new_position
             self.update_field_of_view()
+            event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="move",
+                actor=self.name,
+                location=old_position,
+                description=f"{self.name} moved {direction} to {new_position}.",
+                emotional_weight=0.0,
+            )
+            self.memory.add_event(event)
+            self.tank.broadcast_event(event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="move",
+                success=True,
+                details={
+                    "direction": direction,
+                    "from_position": list(old_position),
+                    "to_position": list(new_position),
+                },
+            )
         else:
             LOGGER.info(f"Move blocked. {self.name} remains at {self.position}")
+            event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="move_blocked",
+                actor=self.name,
+                location=self.position,
+                description=f"{self.name} tried to move {direction} but was blocked.",
+                emotional_weight=-0.1,
+            )
+            self.memory.add_event(event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="move",
+                success=False,
+                details={
+                    "direction": direction,
+                    "from_position": list(old_position),
+                    "blocked_at": list(new_position),
+                },
+            )
 
     def calculate_new_position(self, direction: str) -> tuple[int, int]:
         """Calculates the new position based on the current position and the given direction."""
@@ -58,6 +113,7 @@ class Fish:
 
     def eat(self, direction: str) -> None:
         """Attempts to eat something in the specified direction."""
+        logger = get_logger()
         LOGGER.info(f"{self.name} is attempting to eat in the {direction} direction.")
         target_position = self.calculate_new_position(direction)
         target = self.tank.get_object_at_position(target_position)
@@ -65,29 +121,140 @@ class Fish:
         if target and target in self.likes_to_eat:
             LOGGER.info(f"{self.name} ate {target} at position {target_position}.")
             self.tank.remove_object_at_position(target_position)
+            event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="ate",
+                actor=self.name,
+                location=target_position,
+                description=f"{self.name} ate {target} at {target_position}.",
+                emotional_weight=0.5,
+            )
+            self.memory.add_event(event)
+            self.tank.broadcast_event(event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="eat",
+                success=True,
+                details={
+                    "direction": direction,
+                    "target": target,
+                    "position": list(target_position),
+                },
+            )
         else:
-            LOGGER.info(
-                f"Nothing edible found at position {target_position} or {self.name} doesn't like to eat {target}."
+            LOGGER.info(f"Nothing edible found at position {target_position} or {self.name} doesn't like to eat {target}.")
+            event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="eat_failed",
+                actor=self.name,
+                location=target_position,
+                description=f"{self.name} tried to eat in {direction} but found nothing edible.",
+                emotional_weight=-0.1,
+            )
+            self.memory.add_event(event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="eat",
+                success=False,
+                details={
+                    "direction": direction,
+                    "target": target,
+                    "position": list(target_position),
+                },
             )
 
     def attack(self, direction: str) -> None:
         """Attempts to attack another fish in the specified direction."""
+        logger = get_logger()
         LOGGER.info(f"{self.name} is attempting to attack in the {direction} direction.")
         target_position = self.calculate_new_position(direction)
         target_fish = self.tank.get_fish_at_position(target_position)
 
         if target_fish:
             LOGGER.info(f"{self.name} attacked {target_fish.name} at position {target_position}!")
-            # Implement attack logic (e.g., reduce health or remove the fish)
-            # For now, we can assume the fish is removed from the tank after attack
+            attacker_event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="attack",
+                actor=self.name,
+                target=target_fish.name,
+                location=target_position,
+                description=f"{self.name} attacked {target_fish.name}.",
+                emotional_weight=0.2,
+            )
+            self.memory.add_event(attacker_event)
+            if target_fish.name not in self.relationships:
+                self.relationships[target_fish.name] = Relationship(other_fish_name=target_fish.name)
+            self.relationships[target_fish.name].update_from_event(attacker_event)
+            victim_event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="attacked",
+                actor=self.name,
+                target=target_fish.name,
+                location=target_position,
+                description=f"{target_fish.name} was attacked by {self.name}.",
+                emotional_weight=-0.8,
+            )
+            target_fish.memory.add_event(victim_event)
+            if self.name not in target_fish.relationships:
+                target_fish.relationships[self.name] = Relationship(other_fish_name=self.name)
+            target_fish.relationships[self.name].update_from_event(victim_event)
             self.tank.remove_fish_at_position(target_position)
+            self.tank.broadcast_event(attacker_event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="attack",
+                success=True,
+                details={
+                    "direction": direction,
+                    "target_fish": target_fish.name,
+                    "position": list(target_position),
+                },
+            )
         else:
             LOGGER.info(f"No fish found to attack at position {target_position}.")
+            event = MemoryEvent(
+                round=self.get_current_round(),
+                event_type="attack_failed",
+                actor=self.name,
+                location=target_position,
+                description=f"{self.name} tried to attack in {direction} but found no target.",
+                emotional_weight=-0.1,
+            )
+            self.memory.add_event(event)
+            logger.log_fish_action(
+                fish_name=self.name,
+                round_num=self.get_current_round(),
+                action="attack",
+                success=False,
+                details={
+                    "direction": direction,
+                    "position": list(target_position),
+                },
+            )
 
     def speak(self, text: str) -> None:
         """Store a line of monologue for later rendering."""
+        logger = get_logger()
         LOGGER.info(f"{self.name} says: {text}")
         self.monologue = text
+        event = MemoryEvent(
+            round=self.get_current_round(),
+            event_type="speak",
+            actor=self.name,
+            description=f"{self.name} said: {text}",
+            emotional_weight=0.1,
+        )
+        self.memory.add_event(event)
+        logger.log_fish_action(
+            fish_name=self.name,
+            round_num=self.get_current_round(),
+            action="speak",
+            success=True,
+            details={"text": text},
+        )
 
 
 @dataclass
@@ -109,6 +276,8 @@ class FishTank:
     top_border: str = "🌊"
     bottom_border: str = "🪨"
     side_border: str = "🪟"
+    current_round: int = 0
+    view_range: int = 2
 
     def add_fish(self, fish: Fish) -> None:
         """Adds a fish to the tank."""
@@ -159,6 +328,34 @@ class FishTank:
         """Removes a fish at the specified position."""
         self.fishes = [fish for fish in self.fishes if fish.position != position]
         LOGGER.info(f"Fish at position {position} has been removed from the tank.")
+
+    def is_in_view(self, observer_pos: tuple[int, int], event_pos: tuple[int, int] | None) -> bool:
+        """Check if an event position is within view range of an observer."""
+        if event_pos is None:
+            return False
+        distance = abs(observer_pos[0] - event_pos[0]) + abs(observer_pos[1] - event_pos[1])
+        return distance <= self.view_range
+
+    def broadcast_event(self, event: MemoryEvent) -> None:
+        """Broadcast an event to all fish who can observe it."""
+        for fish in self.fishes:
+            if fish.name == event.actor:
+                continue
+            if event.location and self.is_in_view(fish.position, event.location):
+                fish.memory.add_event(event)
+                if event.target and event.event_type == "attack":
+                    observer_event = MemoryEvent(
+                        round=event.round,
+                        event_type="observed_attack",
+                        actor=event.actor,
+                        target=event.target,
+                        location=event.location,
+                        description=f"{fish.name} saw {event.actor} attack {event.target}.",
+                        emotional_weight=-0.3,
+                    )
+                    if event.actor not in fish.relationships:
+                        fish.relationships[event.actor] = Relationship(other_fish_name=event.actor)
+                    fish.relationships[event.actor].update_from_event(observer_event)
 
     def get_mini_map(self, position: tuple[int, int], view_range: int = 2) -> list[list[str | None]]:
         """Generates a mini-map of the surrounding area based on the fish's position."""
@@ -216,19 +413,35 @@ class FishTank:
         for fish in self.fishes:
             if fish.monologue:
                 print(f"{fish.emoji} {fish.name}: {fish.monologue}")
-                fish.monologue = "" # Clear monologue after displaying
+                fish.monologue = ""  # Clear monologue after displaying
 
 
-def ai_run(max_rounds: int = 5, client=None) -> FishTank:
+def ai_run(max_rounds: int = 5, client=None, save_dir: Path | None = None) -> FishTank:
     """Run the game loop controlled by an AI actor."""
 
     load_env()
     if client is None:
         client = OpenAI()
 
+    logger = get_logger()
+    session_manager = SessionManager()
+
     tank = FishTank(width=10, height=8)
-    fish1 = Fish(name="Nemo", emoji="🐟", position=(5, 5), tank=tank, likes_to_eat=["🌿"])
-    fish2 = Fish(name="Dory", emoji="�", position=(2, 2), tank=tank)
+    fish1 = Fish(
+        name="Nemo",
+        emoji="🐟",
+        position=(5, 5),
+        tank=tank,
+        likes_to_eat=["🌿"],
+        traits=["curious", "friendly", "brave"],
+    )
+    fish2 = Fish(
+        name="Dory",
+        emoji="🐠",
+        position=(2, 2),
+        tank=tank,
+        traits=["forgetful", "optimistic", "friendly"],
+    )
     tank.add_fish(fish1)
     tank.add_fish(fish2)
 
@@ -236,6 +449,30 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
     seaweed = InanimateObject(emoji="🌿", position=(7, 7))
     tank.add_object(rock)
     tank.add_object(seaweed)
+
+    fish_roster = [
+        FishInfo(
+            name=fish.name,
+            emoji=fish.emoji,
+            position=fish.position,
+            traits=fish.traits,
+            likes_to_eat=fish.likes_to_eat,
+        )
+        for fish in tank.fishes
+    ]
+    session_manager.create_session(
+        session_id=logger.session_id,
+        tank_width=tank.width,
+        tank_height=tank.height,
+        max_rounds=max_rounds,
+        fish_roster=fish_roster,
+    )
+
+    logger.log_game_start(
+        fish_roster=[fish_info.__dict__ for fish_info in fish_roster],
+        tank_size=(tank.width, tank.height),
+        config={"max_rounds": max_rounds},
+    )
 
     tank.render_tank_with_monologues()
 
@@ -298,13 +535,24 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
         },
     ]
 
+    from ai_fish_tank.persistence import save_all_fish
+
     bots = {fish.name: FishBot(fish=fish, client=client) for fish in tank.fishes}
 
-    for i in range(max_rounds):
-        print(f"\n--- Round {i+1} ---")
+    final_round = 0
+    winner = None
+    for round_num in range(max_rounds):
+        tank.current_round = round_num + 1
+        final_round = tank.current_round
+        print(f"\n--- Round {tank.current_round} ---")
         state = tank.render_tank_str()
+
+        logger.log_round_start(round_num=tank.current_round, tank_state=state)
+
         for bot in bots.values():
-            tool_calls = bot.decide_action(state, tools)
+            if bot.fish not in tank.fishes:
+                continue
+            tool_calls = bot.decide_action(state, tools, round_num=tank.current_round)
             for call in tool_calls:
                 args = json.loads(call.function.arguments)
                 fish = bot.fish
@@ -333,11 +581,39 @@ def ai_run(max_rounds: int = 5, client=None) -> FishTank:
                 LOGGER.info(content)
                 bot.record_tool_result(call, content)
 
+        for fish in tank.fishes:
+            fish.memory.forget_old_events(tank.current_round)
+
+        fish_states = [
+            {
+                "name": fish.name,
+                "emoji": fish.emoji,
+                "position": list(fish.position),
+                "monologue": fish.monologue,
+            }
+            for fish in tank.fishes
+        ]
+        logger.log_round_end(round_num=tank.current_round, fish_states=fish_states)
+
+        if save_dir:
+            save_all_fish(tank.fishes, save_dir)
+
         tank.render_tank_with_monologues()
 
         if len(tank.fishes) <= 1:
             print("\n--- Game Over ---")
+            if tank.fishes:
+                winner = tank.fishes[0].name
             break
+
+    survivors = [fish.name for fish in tank.fishes]
+    logger.log_game_end(final_round=final_round, winner=winner, survivors=survivors)
+    session_manager.end_session(
+        session_id=logger.session_id,
+        final_round=final_round,
+        winner=winner,
+        survivors=survivors,
+    )
 
     print("\n--- Final Tank State ---")
     tank.render_tank_with_monologues()

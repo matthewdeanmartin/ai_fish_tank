@@ -23,6 +23,8 @@ dependencies = [
     "colorlog>=6.8.0,<7",
     "bug-trail-core",
     "python-dotenv>=1.0.1",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
 ]
 
 [project.urls]
@@ -32,6 +34,7 @@ dependencies = [
 [project.scripts]
 ai_fish_tank = 'ai_fish_tank.__main__:run'
 ais = 'ai_fish_tank.__main__:run'
+fish-tank-api = 'ai_fish_tank.api_server:run'
 
 
 [dependency-groups]

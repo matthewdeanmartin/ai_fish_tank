@@ -18,8 +18,8 @@ class FakeClient:
                 arguments=json.dumps({"direction": "north"}),
             ),
         )
-        message = SimpleNamespace(tool_calls=[call])
-        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        message = SimpleNamespace(tool_calls=[call], content=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=None)
 
 
 def test_ai_run_moves_fish(monkeypatch):
