@@ -187,4 +187,6 @@ app_author = "matthewdeanmartin"
 report_folder = "logs"
 database_path = "bug_trail.db"
 [tool.uv]
+
+[tool.uv.pip]
 universal = true
