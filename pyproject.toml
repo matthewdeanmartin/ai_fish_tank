@@ -186,3 +186,5 @@ app_name = "ai_fish_tank"
 app_author = "matthewdeanmartin"
 report_folder = "logs"
 database_path = "bug_trail.db"
+[tool.uv]
+universal = true
