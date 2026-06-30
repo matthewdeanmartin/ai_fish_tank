@@ -70,7 +70,7 @@ dev = [
     "linkcheckmd>=1.4.0",
     "codespell>=2.2.6", "pyenchant>=3.2.2",
     "metametameta>=0.1.0",
-    "keepachangelog-manager"
+    "keepachangelog-manager-fork[all]>=6.5.0"
 ]
 
 [tool.black]
