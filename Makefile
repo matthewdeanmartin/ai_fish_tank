@@ -94,7 +94,7 @@ check_spelling:
 	$(VENV) codespell ai_fish_tank --ignore-words=private_dictionary.txt
 
 check_changelog:
-	$(VENV) changelogmanager validate
+	$(VENV) kaclm validate
 
 check_all_docs: check_docs check_md check_spelling check_changelog
 
